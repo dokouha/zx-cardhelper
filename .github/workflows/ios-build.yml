@@ -1,0 +1,129 @@
+# iOS 自动构建工作流
+# 触发条件：1) 手动触发 2) 发布 Release 时自动触发
+# 说明：
+#   - 使用 macOS runner（GitHub 免费额度含 2000 分钟/月 macOS）
+#   - 默认构建未签名 IPA（可安装到已越狱设备或通过 AltStore/Sideloadly 侧载）
+#   - 如需签名分发，需配置 Apple Developer 证书（见下方注释）
+#
+# 所需 Secrets（仅签名构建需要）：
+#   - APPLE_CERT_BASE64:  开发/分发证书 .p12 的 base64
+#   - APPLE_CERT_PASSWORD: 证书密码
+#   - APPLE_PROVISION_BASE64: provisioning profile 的 base64
+#   - APPLE_TEAM_ID: Apple Developer Team ID
+
+name: iOS Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（留空则从 changelog.ts 读取）'
+        required: false
+        default: ''
+  release:
+    types: [published]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: |
+          npx tsc --noEmit -p tsconfig.app.json
+          npx vite build
+
+      - name: Sync to iOS
+        run: npx cap sync ios
+
+      - name: Read version
+        id: ver
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION=$(node -e "console.log(require('./src/data/changelog').APP_VERSION)" 2>/dev/null || echo "1.69")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      # ─── 未签名构建（默认）───
+      # 生成未签名 IPA，可用于越狱设备或 AltStore 侧载
+      - name: Build iOS (unsigned)
+        run: |
+          cd ios/App
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            -archivePath build/App.xcarchive \
+            archive
+
+          # 从 xcarchive 生成未签名 IPA
+          mkdir -p build/Payload
+          cp -r build/App.xcarchive/Products/Applications/*.app build/Payload/
+          cd build
+          zip -r "Z-X-CardHelper-v${{ steps.ver.outputs.version }}-unsigned.ipa" Payload
+        continue-on-error: true
+        id: unsigned_build
+
+      # ─── 签名构建（需配置 Secrets）───
+      # 取消注释并配置 Secrets 后可生成签名 IPA
+      #
+      # - name: Import signing certificate
+      #   if: steps.unsigned_build.outcome == 'failure'
+      #   run: |
+      #     echo "$APPLE_CERT_BASE64" | base64 -d > cert.p12
+      #     security create-keychain -p "" build.keychain
+      #     security import cert.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+      #     security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+      #   env:
+      #     APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
+      #     APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+      #
+      # - name: Build iOS (signed)
+      #   if: steps.unsigned_build.outcome == 'failure'
+      #   run: |
+      #     cd ios/App
+      #     xcodebuild \
+      #       -workspace App.xcworkspace \
+      #       -scheme App \
+      #       -configuration Release \
+      #       -sdk iphoneos \
+      #       -derivedDataPath build \
+      #       DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+      #       -archivePath build/App.xcarchive \
+      #       archive
+      #   env:
+      #     APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-v${{ steps.ver.outputs.version }}
+          path: ios/App/App/build/*.ipa
+          retention-days: 30
+
+      - name: Attach IPA to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ios/App/App/build/*.ipa

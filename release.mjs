@@ -156,6 +156,19 @@ async function main() {
 
   console.log(`\n=== 发布完成 ===`)
   console.log(`Release 页: ${release.html_url}`)
+
+  // 4. 触发 iOS 构建工作流（macOS runner 编译 IPA）
+  try {
+    const wfRes = await ghFetch(`https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/ios-build.yml/dispatches`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref: 'main', inputs: { version } }),
+    })
+    console.log('✅ iOS 构建工作流已触发（macOS runner 编译 IPA，约 10-15 分钟后完成并自动附加到 Release）')
+  } catch (e) {
+    console.warn(`⚠️ iOS 构建触发失败（不影响 Android/Electron 发布）: ${e.message}`)
+    console.warn('   可手动在 GitHub Actions 页面触发：https://github.com/dokouha/zx-cardhelper/actions/workflows/ios-build.yml')
+  }
 }
 
 main().catch(e => { console.error('FATAL:', e.message); process.exit(1) })
