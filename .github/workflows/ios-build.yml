@@ -66,7 +66,7 @@ jobs:
         run: |
           cd ios/App
           xcodebuild \
-            -workspace App.xcworkspace \
+            -project App.xcodeproj \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
@@ -119,11 +119,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-ipa-v${{ steps.ver.outputs.version }}
-          path: ios/App/App/build/*.ipa
+          path: ios/App/build/*.ipa
           retention-days: 30
 
       - name: Attach IPA to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: ios/App/App/build/*.ipa
+          files: ios/App/build/*.ipa
