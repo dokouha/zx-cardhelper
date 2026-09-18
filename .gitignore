@@ -22,6 +22,7 @@ ios/App/Pods
 ios/App/output
 *.local
 .temp/
+zx-cardhelper-debug.apk
 
 # Editor directories and files
 .vscode/*
