@@ -12,6 +12,13 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
+import { setGlobalDispatcher, ProxyAgent } from 'undici'
+
+// 支持 http_proxy / https_proxy 环境变量（Node fetch 默认不走代理，需显式设置）
+const PROXY = process.env.https_proxy || process.env.http_proxy || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || ''
+if (PROXY) {
+  setGlobalDispatcher(new ProxyAgent(PROXY))
+}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)))
 const CHANGELOG_TS = path.join(ROOT, 'src', 'data', 'changelog.ts')
@@ -56,7 +63,7 @@ async function ghFetch(url, options = {}) {
     const text = await res.text().catch(() => '')
     throw new Error(`GitHub API ${res.status}: ${text.slice(0, 300)}`)
   }
-  return res
+  return await res.json()
 }
 
 async function main() {
@@ -110,7 +117,7 @@ async function main() {
     execSync(`powershell -NoProfile -Command "Compress-Archive -Path '${RELEASE_DIR.replace(/'/g, "''")}' -DestinationPath '${zipPath.replace(/'/g, "''")}' -Force"`, { stdio: 'inherit' })
     assetsToUpload.push({
       file: zipPath,
-      name: `Z-X-卡牌助手-v${version}.zip`,
+      name: `Z-X-CardHelper-v${version}.zip`,
       label: `Electron Windows 便携版 v${version}`,
     })
   }
@@ -120,12 +127,17 @@ async function main() {
     return
   }
 
-  // 3. 逐个上传
+  // 3. 逐个上传（已存在的资产跳过，避免 422 already_exists）
+  const existingAssets = new Set((release.assets || []).map(a => a.name))
   for (const a of assetsToUpload) {
     const name = a.name || path.basename(a.file)
+    if (existingAssets.has(name)) {
+      console.log(`⏭️ ${name} 已存在，跳过`)
+      continue
+    }
     const size = fs.statSync(a.file).size
     console.log(`上传 ${name} (${(size / 1024 / 1024).toFixed(1)} MB) ...`)
-    const upRes = await fetch(`${apiBase}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`, {
+    const upRes = await fetch(`https://uploads.github.com/repos/${OWNER}/${REPO}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${TOKEN}`,

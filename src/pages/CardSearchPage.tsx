@@ -128,6 +128,29 @@ export default function CardSearchPage() {
     search(newPage)
   }, [search])
 
+  // 翻页或筛选结果变化后滚动到页面顶部
+  const prevPageRef = useRef(page)
+  const prevTotalRef = useRef(total)
+  useEffect(() => {
+    if (prevPageRef.current !== page || prevTotalRef.current !== total) {
+      prevPageRef.current = page
+      prevTotalRef.current = total
+      // 翻页/新搜索时清除保存的滚动位置
+      savedScrollPosition = 0
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = 0
+          }
+          const main = document.querySelector('main')
+          if (main) {
+            main.scrollTop = 0
+          }
+        })
+      })
+    }
+  }, [page, total])
+
   const totalPages = Math.ceil(total / pageSize)
 
   return (

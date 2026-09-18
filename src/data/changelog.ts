@@ -8,9 +8,18 @@ export interface ChangelogEntry {
   changes: string[]
 }
 
-export const APP_VERSION = '1.68'
+export const APP_VERSION = '1.69'
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.69',
+    date: '2026-09-18',
+    changes: [
+      '修复版本号显示不一致问题（package.json 与 build.gradle/changelog 版本同步）',
+      '修复卡牌查询翻页后页面停留在底部的问题，现在翻页自动滚动到顶部',
+      '新增 iOS 平台支持（需在 Mac 上用 Xcode 编译生成 IPA）',
+    ],
+  },
   {
     version: '1.68',
     date: '2026-09-16',

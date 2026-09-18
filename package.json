@@ -1,7 +1,7 @@
 {
   "name": "zx-app",
   "private": true,
-  "version": "1.16.0",
+  "version": "1.69",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -30,7 +30,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "public/favicon.svg"
@@ -48,6 +50,7 @@
     "@capacitor/cli": "^8.4.2",
     "@capacitor/core": "^8.4.2",
     "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/ios": "^8.5.2",
     "@rolldown/binding-win32-x64-msvc": "^1.1.5",
     "@tailwindcss/vite": "^4.3.3",
     "lucide-react": "^1.25.0",

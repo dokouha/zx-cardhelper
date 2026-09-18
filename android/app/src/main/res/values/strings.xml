@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Z/X 卡牌助手</string>
+    <string name="title_activity_main">Z/X 卡牌助手</string>
+    <string name="package_name">com.zx.cardhelper</string>
+    <string name="custom_url_scheme">com.zx.cardhelper</string>
+</resources>

@@ -16,6 +16,10 @@ android/build
 android/app/build
 android/.gradle
 android/app/src/main/assets/public
+ios/App/App/build
+ios/App/build
+ios/App/Pods
+ios/App/output
 *.local
 .temp/
 
