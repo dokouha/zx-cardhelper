@@ -51,7 +51,6 @@
     "@capacitor/core": "^8.4.2",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/ios": "^8.5.2",
-    "@rolldown/binding-win32-x64-msvc": "^1.1.5",
     "@tailwindcss/vite": "^4.3.3",
     "lucide-react": "^1.25.0",
     "react": "^19.2.7",
@@ -59,6 +58,9 @@
     "react-router-dom": "^7.18.1",
     "tailwindcss": "^4.3.3",
     "zustand": "^5.0.14"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.1.5"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
