@@ -22,7 +22,10 @@ if (PROXY) {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)))
 const CHANGELOG_TS = path.join(ROOT, 'src', 'data', 'changelog.ts')
-const APK_PATH = path.join(ROOT, 'zx-cardhelper-debug.apk')
+// APK 始终从 gradle 构建产物读取（保证上传的是最新版本）
+const GRADLE_APK = path.join(ROOT, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
+const ROOT_APK = path.join(ROOT, 'zx-cardhelper-debug.apk')
+const APK_PATH = fs.existsSync(GRADLE_APK) ? GRADLE_APK : ROOT_APK
 const RELEASE_DIR = path.join(ROOT, 'release', 'Z-X-卡牌助手')
 
 // ===== GitHub 配置（可在环境变量 ZX_GH_OWNER / ZX_GH_REPO 覆盖）=====
