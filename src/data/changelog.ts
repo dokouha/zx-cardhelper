@@ -8,9 +8,17 @@ export interface ChangelogEntry {
   changes: string[]
 }
 
-export const APP_VERSION = '1.69'
+export const APP_VERSION = '1.70'
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.70',
+    date: '2026-09-19',
+    changes: [
+      '修复点燃卡识别：IG12-031/032/033/034（优一者系列 R+）、E46-033 共 5 张卡被错误识别为非点燃卡，已补上点燃标记（组牌时正确计入点燃卡数量）',
+      '补齐 PR11、PR13 卡包缺失的 31 张卡牌数据（含 5 张点燃卡）',
+    ],
+  },
   {
     version: '1.69',
     date: '2026-09-18',
