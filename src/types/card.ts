@@ -329,6 +329,7 @@ export interface CardFilter {
   keyword: string
   color: CardColor | null
   multiColorOnly: boolean          // 仅显示多色卡
+  excludePlayerRestricted: boolean // 排除效果限制玩家的卡（【玩家】《XX》）
   types: CardType[]      // Empty array = all types
   race: string | null
   rarity: Rarity | null
@@ -345,6 +346,7 @@ export const DEFAULT_FILTER: CardFilter = {
   keyword: '',
   color: null,
   multiColorOnly: false,
+  excludePlayerRestricted: false,
   types: [],
   race: null,
   rarity: null,

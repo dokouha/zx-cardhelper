@@ -122,6 +122,24 @@ export default function CardFilterPanel() {
         </div>
       </div>
 
+      {/* Exclude Player-Restricted Cards */}
+      <div className="space-y-1">
+        <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+          效果限定玩家卡
+        </label>
+        <button
+          onClick={() => setFilter({ excludePlayerRestricted: !filter.excludePlayerRestricted })}
+          className="px-2.5 py-1 rounded text-xs border"
+          style={{
+            background: filter.excludePlayerRestricted ? 'var(--color-accent)' : 'var(--color-bg-card)',
+            borderColor: filter.excludePlayerRestricted ? 'var(--color-accent)' : 'var(--color-border)',
+            color: filter.excludePlayerRestricted ? 'white' : 'var(--color-text-primary)',
+          }}
+        >
+          {filter.excludePlayerRestricted ? '已排除限制玩家的卡' : '排除效果限制玩家的卡'}
+        </button>
+      </div>
+
       {/* Cost Range */}
       <div className="space-y-1">
         <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>

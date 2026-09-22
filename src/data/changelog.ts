@@ -8,9 +8,18 @@ export interface ChangelogEntry {
   changes: string[]
 }
 
-export const APP_VERSION = '1.70'
+export const APP_VERSION = '1.71'
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.71',
+    date: '2026-09-22',
+    changes: [
+      '修复点燃卡识别：IG09-022、IG09-072（庙会风格 莉洁尔 R/SEC 版）共 2 张卡被错误识别为非点燃卡，已补上点燃标记',
+      '卡牌查询新增「排除效果限定玩家」选项：开启后自动过滤效果含【玩家】《XX》限制的卡牌，方便查找中立可用的卡',
+      '组牌页新增 PDF 打印功能：按 Z/X 标准卡尺寸（63×88mm）A4 排版，每页 9 张卡带裁切线，可打印或导出 PDF',
+    ],
+  },
   {
     version: '1.70',
     date: '2026-09-19',

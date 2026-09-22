@@ -4,11 +4,12 @@ import { useDeckStore, type DeckTab } from '@/stores/deckStore'
 import { db } from '@/db/database'
 import { COLOR_HEX, COLOR_LABELS, CARD_TYPE_LABELS, DECK_RULES, DEFAULT_FILTER, getDeckZone, TYPE_SORT_ORDER, getCardTypeLabel, getDeckLimit, isBannedCard, isLimitedCard, CHUANSHUO_LIMIT } from '@/types/card'
 import type { ZxCard, DeckEntry, DeckValidationResult, Deck, DeckSetup, CardFilter } from '@/types/card'
-import { ArrowLeft, Plus, Minus, Search, AlertCircle, CheckCircle, Info, Download, Upload, Image as ImageIcon, GripVertical, ChevronUp, ChevronDown, X, ArrowUpDown, Pencil, RefreshCw, SlidersHorizontal } from 'lucide-react'
+import { ArrowLeft, Plus, Minus, Search, AlertCircle, CheckCircle, Info, Download, Upload, Image as ImageIcon, GripVertical, ChevronUp, ChevronDown, X, ArrowUpDown, Pencil, RefreshCw, SlidersHorizontal, Printer } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getPackPrices, formatJPY, yenToCny, type PackPriceResult, type PackPriceVariant } from '@/services/priceService'
 import DeckSearchFilterPanel from '@/components/deck/DeckSearchFilterPanel'
+import DeckPrintView from '@/components/deck/DeckPrintView'
 
 export default function DeckBuilderPage() {
   const { deckId } = useParams<{ deckId: string }>()
@@ -51,6 +52,7 @@ export default function DeckBuilderPage() {
   const [exportedBlobUrl, setExportedBlobUrl] = useState('')
   const [exportedBase64, setExportedBase64] = useState('')
   const [showDeckEdit, setShowDeckEdit] = useState(false)
+  const [showPrintView, setShowPrintView] = useState(false)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
   // 替换卡牌弹窗状态：目标卡牌（当前条目）+ 是否显示
@@ -846,6 +848,18 @@ export default function DeckBuilderPage() {
         </div>
       )}
 
+      {/* PDF 打印视图 */}
+      {showPrintView && currentDeck && (
+        <DeckPrintView
+          entries={{
+            mainDeck: currentDeck.mainDeck,
+            extraDeck: currentDeck.extraDeck,
+            otherDeck: currentDeck.otherDeck,
+          }}
+          onClose={() => setShowPrintView(false)}
+        />
+      )}
+
       {/* Tab Bar */}
       <div className="flex border-b overflow-x-auto" style={{ borderColor: 'var(--color-border)' }}>
         {tabs.map(tab => (
@@ -1116,6 +1130,14 @@ export default function DeckBuilderPage() {
                 >
                   <ImageIcon size={14} />
                   导出图片
+                </button>
+                <button
+                  onClick={() => setShowPrintView(true)}
+                  className="flex-1 min-w-[100px] flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm border"
+                  style={{ background: 'var(--color-bg-card)', borderColor: 'var(--color-accent)', color: 'var(--color-accent)' }}
+                >
+                  <Printer size={14} />
+                  打印PDF
                 </button>
               </div>
               {exportText && (

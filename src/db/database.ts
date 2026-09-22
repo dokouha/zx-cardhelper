@@ -144,6 +144,11 @@ class DatabaseManager {
       )
     }
 
+    // 排除效果限制玩家的卡（效果文本含【玩家】《XX》）
+    if (filter.excludePlayerRestricted) {
+      filtered = filtered.filter(c => !/【玩家】《[^》]+》/.test(c.effect))
+    }
+
     const total = filtered.length
 
     // Sort
