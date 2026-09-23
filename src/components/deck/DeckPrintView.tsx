@@ -1,4 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
+import { jsPDF } from 'jspdf'
+import { Capacitor } from '@capacitor/core'
+import { Filesystem, Directory } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
 import type { ZxCard, DeckEntry } from '@/types/card'
 import { db } from '@/db/database'
 
@@ -22,14 +26,18 @@ interface PrintCard {
 
 export default function DeckPrintView({
   entries,
+  deckName,
   onClose,
 }: {
   entries: { mainDeck: DeckEntry[]; extraDeck: DeckEntry[]; otherDeck: DeckEntry[] }
+  deckName?: string
   onClose: () => void
 }) {
   const [cards, setCards] = useState<PrintCard[]>([])
   const [loading, setLoading] = useState(true)
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
+  const [exporting, setExporting] = useState(false)
+  const [exportProgress, setExportProgress] = useState('')
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -78,6 +86,204 @@ export default function DeckPrintView({
     setImageErrors(prev => new Set(prev).add(serial))
   }
 
+  /**
+   * 预加载卡牌图片为 base64 JPEG data URL
+   * 返回 Map<serial, dataUrl>，加载失败的卡返回空字符串
+   */
+  const preloadImages = async (cardList: PrintCard[]): Promise<Map<string, string>> => {
+    const uniqueCards = new Map<string, string>() // serial -> imageUrl
+    for (const c of cardList) {
+      if (!uniqueCards.has(c.serial)) {
+        uniqueCards.set(c.serial, c.imageUrl)
+      }
+    }
+
+    const result = new Map<string, string>()
+    const serials = [...uniqueCards.keys()]
+    let loaded = 0
+    const total = serials.length
+
+    await new Promise<void>((resolveAll) => {
+      if (total === 0) { resolveAll(); return }
+      for (const serial of serials) {
+        const url = uniqueCards.get(serial)!
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas')
+            canvas.width = img.naturalWidth
+            canvas.height = img.naturalHeight
+            const ctx = canvas.getContext('2d')
+            if (ctx) {
+              ctx.drawImage(img, 0, 0)
+              result.set(serial, canvas.toDataURL('image/jpeg', 0.85))
+            }
+          } catch {
+            // CORS or canvas taint, skip
+          }
+          loaded++
+          if (loaded === total) resolveAll()
+        }
+        img.onerror = () => {
+          loaded++
+          if (loaded === total) resolveAll()
+        }
+        img.src = url
+      }
+      // Timeout 30s
+      setTimeout(() => resolveAll(), 30000)
+    })
+
+    return result
+  }
+
+  /**
+   * 生成 PDF 文件，返回 jsPDF 实例
+   */
+  const generatePDF = async (): Promise<jsPDF> => {
+    setExportProgress('正在加载卡牌图片...')
+    const imgMap = await preloadImages(expandedCards)
+
+    setExportProgress('正在生成 PDF...')
+    const pdf = new jsPDF('p', 'mm', 'a4')
+    const pageW = pdf.internal.pageSize.getWidth()
+    const pageH = pdf.internal.pageSize.getHeight()
+
+    for (let pageIdx = 0; pageIdx < pages.length; pageIdx++) {
+      if (pageIdx > 0) pdf.addPage()
+
+      const pageCards = pages[pageIdx]
+      for (let i = 0; i < pageCards.length; i++) {
+        const col = i % COLS
+        const row = Math.floor(i / COLS)
+        const x = MARGIN + col * (CARD_W + GAP)
+        const y = MARGIN + row * (CARD_H + GAP)
+        const card = pageCards[i]
+
+        // 画卡牌边框（浅灰色）
+        pdf.setDrawColor(204, 204, 204)
+        pdf.setLineWidth(0.2)
+        pdf.rect(x, y, CARD_W, CARD_H)
+
+        // 添加图片
+        const imgData = imgMap.get(card.serial)
+        if (imgData) {
+          try {
+            pdf.addImage(imgData, 'JPEG', x, y, CARD_W, CARD_H)
+          } catch {
+            // 图片添加失败，画占位
+            pdf.setFillColor(245, 245, 245)
+            pdf.rect(x, y, CARD_W, CARD_H, 'F')
+            pdf.setTextColor(102, 102, 102)
+            pdf.setFontSize(8)
+            pdf.text(card.serial, x + CARD_W / 2, y + CARD_H / 2, { align: 'center' })
+          }
+        } else {
+          // 无图片，画占位
+          pdf.setFillColor(245, 245, 245)
+          pdf.rect(x, y, CARD_W, CARD_H, 'F')
+          pdf.setTextColor(102, 102, 102)
+          pdf.setFontSize(8)
+          const shortName = card.name.length > 12 ? card.name.slice(0, 12) + '...' : card.name
+          pdf.text(card.serial, x + CARD_W / 2, y + CARD_H / 2 - 3, { align: 'center' })
+          pdf.text(shortName, x + CARD_W / 2, y + CARD_H / 2 + 4, { align: 'center' })
+        }
+
+        // 裁切线（左边和上边，非第一列/行的卡）
+        if (col > 0) {
+          pdf.setDrawColor(153, 153, 153)
+          pdf.setLineWidth(0.1)
+          pdf.setLineDashPattern([1, 1], 0)
+          pdf.line(x - GAP / 2, y, x - GAP / 2, y + CARD_H)
+          pdf.setLineDashPattern([], 0)
+        }
+        if (row > 0) {
+          pdf.setDrawColor(153, 153, 153)
+          pdf.setLineWidth(0.1)
+          pdf.setLineDashPattern([1, 1], 0)
+          pdf.line(x, y - GAP / 2, x + CARD_W, y - GAP / 2)
+          pdf.setLineDashPattern([], 0)
+        }
+      }
+    }
+
+    setExportProgress('')
+    return pdf
+  }
+
+  /**
+   * 导出 PDF：下载或保存到设备
+   */
+  const handleExportPDF = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const pdf = await generatePDF()
+      const fileName = `${deckName || 'deck'}-print.pdf`
+
+      if (Capacitor.isNativePlatform()) {
+        // Android/iOS: 保存到 Documents 目录
+        const pdfBase64 = pdf.output('datauristring').split(',')[1]
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: pdfBase64,
+          directory: Directory.Documents,
+        })
+        // 验证写入成功后提示
+        setExportProgress(`PDF 已保存到: ${result.uri}`)
+        setTimeout(() => setExportProgress(''), 3000)
+      } else {
+        // Web/Electron: 直接下载
+        pdf.save(fileName)
+      }
+    } catch (err) {
+      setExportProgress('导出失败: ' + String(err).slice(0, 80))
+      setTimeout(() => setExportProgress(''), 3000)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  /**
+   * 分享 PDF：通过系统分享面板发送到 QQ/微信等
+   */
+  const handleSharePDF = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const pdf = await generatePDF()
+      const fileName = `${deckName || 'deck'}-print.pdf`
+
+      if (Capacitor.isNativePlatform()) {
+        // Android/iOS: 保存到临时目录后分享
+        const pdfBase64 = pdf.output('datauristring').split(',')[1]
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: pdfBase64,
+          directory: Directory.Cache,
+        })
+
+        await Share.share({
+          title: `${deckName || '卡组'} PDF`,
+          text: `${deckName || '卡组'} 牌组打印 PDF`,
+          url: result.uri,
+          dialogTitle: '分享 PDF',
+        })
+      } else {
+        // Web: 下载后提示手动分享
+        pdf.save(fileName)
+        setExportProgress('PDF 已下载，请手动分享文件')
+        setTimeout(() => setExportProgress(''), 3000)
+      }
+    } catch (err) {
+      setExportProgress('分享失败: ' + String(err).slice(0, 80))
+      setTimeout(() => setExportProgress(''), 3000)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
@@ -103,23 +309,51 @@ export default function DeckPrintView({
               共 {expandedCards.length} 张卡，{pages.length} 页（每页 {PER_PAGE} 张）
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
-              onClick={handlePrint}
-              className="px-4 py-2 rounded-lg text-sm font-medium"
+              onClick={handleExportPDF}
+              disabled={exporting}
+              className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
               style={{ background: 'var(--color-accent)', color: 'white' }}
             >
-              打印 / 保存PDF
+              {exporting ? (exportProgress || '处理中...') : '导出 PDF'}
+            </button>
+            <button
+              onClick={handleSharePDF}
+              disabled={exporting}
+              className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+              style={{ background: 'var(--color-success, #22c55e)', color: 'white' }}
+            >
+              分享
+            </button>
+            <button
+              onClick={handlePrint}
+              disabled={exporting}
+              className="px-4 py-2 rounded-lg text-sm border disabled:opacity-50"
+              style={{ background: 'var(--color-bg-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+            >
+              打印
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm border"
+              disabled={exporting}
+              className="px-4 py-2 rounded-lg text-sm border disabled:opacity-50"
               style={{ background: 'var(--color-bg-card)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
             >
               关闭
             </button>
           </div>
         </div>
+
+        {/* Export progress bar */}
+        {exporting && exportProgress && (
+          <div
+            className="px-4 py-2 text-xs text-center print:hidden"
+            style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-accent)' }}
+          >
+            {exportProgress}
+          </div>
+        )}
 
         {/* Preview area */}
         <div className="flex-1 overflow-y-auto p-4 print:overflow-visible print:p-0">

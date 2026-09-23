@@ -856,6 +856,7 @@ export default function DeckBuilderPage() {
             extraDeck: currentDeck.extraDeck,
             otherDeck: currentDeck.otherDeck,
           }}
+          deckName={currentDeck.name}
           onClose={() => setShowPrintView(false)}
         />
       )}

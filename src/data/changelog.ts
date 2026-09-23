@@ -8,9 +8,18 @@ export interface ChangelogEntry {
   changes: string[]
 }
 
-export const APP_VERSION = '1.71'
+export const APP_VERSION = '1.72'
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.72',
+    date: '2026-09-23',
+    changes: [
+      '修复 PDF 打印功能：Android 端 window.print() 不可用导致只能预览无法保存，改用 jsPDF 生成真实 PDF 文件',
+      '新增导出 PDF 按钮：生成 A4 排版 PDF 文件并保存到设备（Android 保存至文档目录，电脑端直接下载）',
+      '新增分享按钮：可将 PDF 直接分享到 QQ、微信等聊天软件（调用系统分享面板）',
+    ],
+  },
   {
     version: '1.71',
     date: '2026-09-22',
