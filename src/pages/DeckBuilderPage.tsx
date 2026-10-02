@@ -53,6 +53,7 @@ export default function DeckBuilderPage() {
   const [exportedBase64, setExportedBase64] = useState('')
   const [showDeckEdit, setShowDeckEdit] = useState(false)
   const [showPrintView, setShowPrintView] = useState(false)
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
   // 替换卡牌弹窗状态：目标卡牌（当前条目）+ 是否显示
@@ -230,56 +231,16 @@ export default function DeckBuilderPage() {
   const extraEntries = useMemo(() => sortEntries(extraEntriesRaw, deckSorted), [extraEntriesRaw, deckSorted, sortEntries])
   const otherEntries = useMemo(() => sortEntries(otherEntriesRaw, deckSorted), [otherEntriesRaw, deckSorted, sortEntries])
 
-  // Check if a card can be added (respects limits)
+  // Check if a card can be added
+  // 优化：允许临时突破卡组上限（区域张数/同名4张/传说1张），保存或退出时由验证提示整改
+  // 仅保留封神指定（禁卡）的阻止——禁卡不属于"上限"范畴
   const canAddCard = useCallback((serial: string, zone: 'mainDeck' | 'extraDeck' | 'otherDeck') => {
-    if (!currentDeck) return false
     const card = db.getCardBySerial(serial)
     if (!card) return false
-
     // 封神指定 = 禁卡，不能加入卡组
     if (isBannedCard(card)) return false
-
-    // 传说指定 = 每卡组合计限 1 张
-    if (isLimitedCard(card)) {
-      const cardName = card.chineseName || card.japaneseName
-      let limitedCount = 0
-      for (const entry of [...currentDeck.mainDeck, ...currentDeck.extraDeck, ...currentDeck.otherDeck]) {
-        const c = db.getCardBySerial(entry.serial)
-        const name = c?.chineseName || c?.japaneseName
-        if (name === cardName) limitedCount += entry.count
-      }
-      if (limitedCount >= CHUANSHUO_LIMIT) return false
-    }
-
-    // Same-name limit: 4 copies across all zones
-    const cardName = card.chineseName || card.japaneseName
-    let nameCount = 0
-    for (const entry of [...currentDeck.mainDeck, ...currentDeck.extraDeck, ...currentDeck.otherDeck]) {
-      const c = db.getCardBySerial(entry.serial)
-      const name = c?.chineseName || c?.japaneseName
-      if (name === cardName) nameCount += entry.count
-    }
-    // Same-name limit: default 4, but some cards allow more (e.g. 20/30)
-    const maxCopies = getDeckLimit(card) ?? DECK_RULES.SAME_CARD_MAX
-    if (nameCount >= maxCopies) return false
-
-    // Zone limits
-    const zoneTotal = currentDeck[zone].reduce((s, e) => s + e.count, 0)
-    if (zone === 'mainDeck' && zoneTotal >= DECK_RULES.MAIN_DECK_EXACT) return false
-    if (zone === 'extraDeck' && zoneTotal >= DECK_RULES.EXTRA_DECK_MAX) return false
-    if (zone === 'otherDeck' && zoneTotal >= DECK_RULES.OTHER_DECK_MAX) return false
-
-    // Link cards limit within other deck
-    if (zone === 'otherDeck' && card.type === 'Link') {
-      const linkCount = currentDeck.otherDeck.reduce((s, e) => {
-        const c = db.getCardBySerial(e.serial)
-        return s + (c?.type === 'Link' ? e.count : 0)
-      }, 0)
-      if (linkCount >= DECK_RULES.LINK_DECK_MAX) return false
-    }
-
     return true
-  }, [currentDeck])
+  }, [])
 
   // Drag-and-drop reorder handlers (Bug 6)
   const handleDragStart = useCallback((e: React.DragEvent, zone: 'mainDeck' | 'extraDeck' | 'otherDeck', index: number) => {
@@ -733,6 +694,16 @@ export default function DeckBuilderPage() {
     showToast('图片已生成，点击下载按钮保存')
   }
 
+  // 退出组牌页：卡组存在超额/违规时弹确认框要求整改
+  const handleExit = () => {
+    const validation = useDeckStore.getState().currentValidation
+    if (validation && !validation.valid && validation.errors.length > 0) {
+      setShowExitConfirm(true)
+    } else {
+      navigate('/decks')
+    }
+  }
+
   if (!currentDeck) return null
 
   const tabs: { key: DeckTab; label: string }[] = [
@@ -748,7 +719,7 @@ export default function DeckBuilderPage() {
     <div className="animate-fade-in flex flex-col h-full">
       {/* Header */}
       <div className="px-4 py-3 flex items-center gap-3">
-        <button onClick={() => navigate('/decks')} style={{ color: 'var(--color-accent)' }}>
+        <button onClick={handleExit} style={{ color: 'var(--color-accent)' }}>
           <ArrowLeft size={20} />
         </button>
         <h2 className="text-base font-semibold flex-1 truncate" style={{ color: 'var(--color-text-primary)' }}>
@@ -764,6 +735,59 @@ export default function DeckBuilderPage() {
         </button>
         <DeckValidationBadge validation={currentValidation} />
       </div>
+
+      {/* Exit Confirm Modal - 卡组超额/违规时退出确认 */}
+      {showExitConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setShowExitConfirm(false)}
+        >
+          <div
+            className="rounded-xl border p-4 w-[90%] max-w-sm space-y-3"
+            style={{ background: 'var(--color-bg-card)', borderColor: 'var(--color-danger)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle size={18} style={{ color: 'var(--color-danger)' }} />
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                卡组尚未整改完成
+              </h3>
+            </div>
+            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              当前卡组存在超额或违规问题，退出前建议整改：
+            </p>
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {(currentValidation?.errors ?? []).slice(0, 5).map((err, i) => (
+                <p key={i} className="text-xs" style={{ color: 'var(--color-danger)' }}>
+                  • {err}
+                </p>
+              ))}
+              {(currentValidation?.errors.length ?? 0) > 5 && (
+                <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  ...共 {currentValidation?.errors.length} 个问题
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium"
+                style={{ background: 'var(--color-accent)', color: 'white' }}
+              >
+                留下来整改
+              </button>
+              <button
+                onClick={() => { setShowExitConfirm(false); navigate('/decks') }}
+                className="flex-1 py-2 rounded-lg text-sm border"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+              >
+                仍要退出
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Deck Edit Modal */}
       {showDeckEdit && (
@@ -1033,8 +1057,14 @@ export default function DeckBuilderPage() {
               const handleAdd = () => {
                 if (!canAddThis) return
                 addCardAuto(card.serial)
-                const cardName = card.chineseName || card.japaneseName
-                showToast(`已添加 ${cardName} 到${zone === 'main' ? '主牌组' : zone === 'extra' ? '额外卡组' : '其他区域'}`)
+                // 超额/违规时提示整改，正常时提示添加成功
+                const validation = useDeckStore.getState().currentValidation
+                if (validation && !validation.valid && validation.errors.length > 0) {
+                  setTimeout(() => showToast(`⚠ ${validation.errors[0]}`), 300)
+                } else {
+                  const cardName = card.chineseName || card.japaneseName
+                  showToast(`已添加 ${cardName} 到${zone === 'main' ? '主牌组' : zone === 'extra' ? '额外卡组' : '其他区域'}`)
+                }
               }
               return (
                 <div

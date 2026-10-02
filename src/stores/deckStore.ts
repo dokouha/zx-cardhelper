@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Deck, DeckEntry, DeckValidationResult, ZxCard, DeckSetup } from '@/types/card'
-import { DECK_RULES, getDeckZone, EMPTY_DECK_SETUP, getDeckLimit, isBannedCard, isLimitedCard, CHUANSHUO_LIMIT } from '@/types/card'
+import { DECK_RULES, getDeckZone, EMPTY_DECK_SETUP, getDeckLimit, isBannedCard, isLimitedCard, CHUANSHUO_LIMIT, CARD_TYPE_LABELS } from '@/types/card'
 import { db } from '@/db/database'
 
 export type DeckTab = 'main' | 'extra' | 'other' | 'preview' | 'search' | 'tools'
@@ -89,7 +89,39 @@ function migrateDeck(deck: Deck): Deck {
   if (!migrated.setup) {
     migrated = { ...migrated, setup: { ...EMPTY_DECK_SETUP } }
   }
+
+  // 区域错放自动迁移：把放入错误区域的卡按类型归位
+  // （如旧版本误将剑临/额外卡添加到主牌组；数据库未加载时查不到卡则保持原状）
+  const corrected = { mainDeck: [], extraDeck: [], otherDeck: [] } as Record<'mainDeck' | 'extraDeck' | 'otherDeck', DeckEntry[]>
+  let moved = false
+  for (const zoneKey of ['mainDeck', 'extraDeck', 'otherDeck'] as const) {
+    for (const entry of migrated[zoneKey]) {
+      const card = db.getCardBySerial(entry.serial)
+      if (!card) {
+        corrected[zoneKey].push(entry)
+        continue
+      }
+      const correctZone = getDeckZone(card.type)
+      const correctKey = correctZone === 'main' ? 'mainDeck' : correctZone === 'extra' ? 'extraDeck' : 'otherDeck'
+      if (correctKey !== zoneKey) {
+        moved = true
+        corrected[correctKey].push(entry)
+      } else {
+        corrected[zoneKey].push(entry)
+      }
+    }
+  }
+  if (moved) {
+    migrated = { ...migrated, mainDeck: corrected.mainDeck, extraDeck: corrected.extraDeck, otherDeck: corrected.otherDeck }
+  }
   return migrated
+}
+
+// 判断牌组是否被 migrateDeck 迁移过（三个区域数组任一被重建）
+function isDeckMigrated(original: Deck, migrated: Deck): boolean {
+  return migrated.mainDeck !== original.mainDeck
+    || migrated.extraDeck !== original.extraDeck
+    || migrated.otherDeck !== original.otherDeck
 }
 
 function loadDecksFromStorage(): Deck[] {
@@ -180,6 +212,10 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
   setCurrentDeck: (deck) => {
     const migrated = deck ? migrateDeck(deck) : null
     const validation = migrated ? get().validateDeck(migrated) : null
+    // 区域迁移后立即持久化，避免下次打开又回滚
+    if (migrated && deck && isDeckMigrated(deck, migrated)) {
+      get().saveDeck(migrated)
+    }
     set({ currentDeck: migrated, currentValidation: validation })
   },
 
@@ -350,6 +386,22 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
     }, 0)
     if (linkDeckCount > DECK_RULES.LINK_DECK_MAX) {
       errors.push(`链结卡最多${DECK_RULES.LINK_DECK_MAX}张，当前${linkDeckCount}张`)
+    }
+
+    // 区域错放检测：卡必须在类型对应的区域（剑临/额外卡类在额外卡组，玩家/链结在其他区域）
+    const ZONE_NAMES = { main: '主牌组', extra: '额外卡组', other: '其他区域' } as const
+    const ZONE_OF_KEY = { mainDeck: 'main', extraDeck: 'extra', otherDeck: 'other' } as const
+    for (const zoneKey of ['mainDeck', 'extraDeck', 'otherDeck'] as const) {
+      for (const entry of deck[zoneKey]) {
+        const card = db.getCardBySerial(entry.serial)
+        if (!card) continue
+        const correctZone = getDeckZone(card.type)
+        if (ZONE_OF_KEY[zoneKey] !== correctZone) {
+          const name = card.chineseName || card.japaneseName || entry.serial
+          const typeLabel = CARD_TYPE_LABELS[card.type] || card.type
+          errors.push(`「${name}」（${entry.serial}）为${typeLabel}卡，应放入${ZONE_NAMES[correctZone]}，当前在${ZONE_NAMES[ZONE_OF_KEY[zoneKey]]}`)
+        }
+      }
     }
 
     // Same-name limit across all zones (default 4, some cards allow more)

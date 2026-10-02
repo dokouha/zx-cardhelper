@@ -8,9 +8,18 @@ export interface ChangelogEntry {
   changes: string[]
 }
 
-export const APP_VERSION = '1.72'
+export const APP_VERSION = '1.73'
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.73',
+    date: '2026-09-23',
+    changes: [
+      '组卡优化：添加卡牌时允许临时突破卡组上限（主牌组50张/同名4张/传说指定等），方便自由组卡；添加后即时提示超额详情，退出组牌页时弹窗提醒整改',
+      '修复 IG14-053 等 87 张卡的类型识别问题：剑临/事件/Z/X EX/玩家/升格等原始类型已规范化，剑临卡正确归入额外卡组',
+      '牌组自动迁移：旧版本误放入主牌组的剑临/额外卡，打开牌组时自动归位到正确区域并提示整改',
+    ],
+  },
   {
     version: '1.72',
     date: '2026-09-23',
