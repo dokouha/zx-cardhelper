@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { checkForUpdate, type UpdateInfo } from '@/services/updateService'
 
 const CHECK_DELAY = 3000 // 启动后延迟 3 秒检查，避免与数据库加载/更新记录弹窗抢屏
-const SHOWN_KEY = 'zx-app-update-shown'
 
 export default function AutoUpdateNotice() {
   const [info, setInfo] = useState<UpdateInfo | null>(null)
@@ -13,10 +12,8 @@ export default function AutoUpdateNotice() {
     const timer = setTimeout(async () => {
       const result = await checkForUpdate()
       if (cancelled) return
+      // 每次启动只要有更新包都提示是否更新
       if (result.hasUpdate) {
-        // 同一版本只提示一次（用户点「稍后」后不重复弹；点「立即更新」记录已处理）
-        const lastShown = localStorage.getItem(SHOWN_KEY)
-        if (lastShown === result.latestVersion) return
         setInfo(result)
         setVisible(true)
       }
@@ -25,13 +22,11 @@ export default function AutoUpdateNotice() {
   }, [])
 
   const handleLater = useCallback(() => {
-    if (info) localStorage.setItem(SHOWN_KEY, info.latestVersion)
     setVisible(false)
-  }, [info])
+  }, [])
 
   const handleUpdate = useCallback(() => {
     if (info?.downloadUrl) {
-      localStorage.setItem(SHOWN_KEY, info.latestVersion)
       window.open(info.downloadUrl, '_blank', 'noopener,noreferrer')
     }
     setVisible(false)

@@ -8,9 +8,17 @@ export interface ChangelogEntry {
   changes: string[]
 }
 
-export const APP_VERSION = '1.73'
+export const APP_VERSION = '1.74'
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.74',
+    date: '2026-10-25',
+    changes: [
+      '卡牌数据增量更新：新增 IG16「共奏幻梦」97张、G46 豪华卡组 38张、PR15 等，共新增 135 张卡，总卡库 16762→16897 张',
+      '自动更新规则调整：每次启动只要有更新包都会提示是否更新（不再同一版本只提示一次）',
+    ],
+  },
   {
     version: '1.73',
     date: '2026-09-23',
