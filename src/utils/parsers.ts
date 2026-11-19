@@ -46,6 +46,7 @@ const TYPE_MAP: Record<string, CardType> = {
   '事件': 'Event',
   '升格': 'Ascension',
   '玩家': 'Player',
+  '玩家EX': 'Player Extra',
   'Z/X EX': 'Z/X Extra',
   '剑临': 'Shift',
   '事件EX': 'Event Extra',

@@ -8,9 +8,17 @@ export interface ChangelogEntry {
   changes: string[]
 }
 
-export const APP_VERSION = '1.74'
+export const APP_VERSION = '1.75'
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.75',
+    date: '2026-11-19',
+    changes: [
+      '卡牌数据增量更新：新增 IG17「赌博之力」97 张，总卡库 16897→16994 张；同步站点官方勘误（IG14-018/IG15-039/IG16-015 效果文本修正）',
+      '修复 IG16-005、G46-002 等卡被识别为主卡组卡片的 BUG：站点返回的「玩家EX」类型未映射，现已正确归入玩家卡区域（共 4 张：IG16-005/085、G46-002/038）',
+    ],
+  },
   {
     version: '1.74',
     date: '2026-10-25',
