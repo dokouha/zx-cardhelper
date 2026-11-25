@@ -54,7 +54,7 @@ export default function DeckPrintView({
         result.push({
           serial: card.serial,
           name: card.chineseName || card.japaneseName || card.serial,
-          imageUrl: card.imageUrl || `http://zximg-cdn.yimieji.com/card/${card.packPrefix}/${card.serial}.png`,
+          imageUrl: card.imageUrl || `https://haronomagia.com/zxcard/images/${card.serial.split('-')[0] || card.packPrefix}/${card.serial}.png`,
           count: entry.count,
         })
       }
@@ -87,8 +87,9 @@ export default function DeckPrintView({
   }
 
   /**
-   * 预加载卡牌图片为 base64 JPEG data URL
-   * 返回 Map<serial, dataUrl>，加载失败的卡返回空字符串
+   * 预加载卡牌图片为 base64 data URL
+   * 优先 fetch→blob（Android CapacitorHttp 绕过 CORS / Electron 无 CORS 限制），
+   * 失败后回退到 crossOrigin 图片+canvas（支持旧CDN ACAO:*），再失败跳过（PDF 画占位）
    */
   const preloadImages = async (cardList: PrintCard[]): Promise<Map<string, string>> => {
     const uniqueCards = new Map<string, string>() // serial -> imageUrl
@@ -100,13 +101,25 @@ export default function DeckPrintView({
 
     const result = new Map<string, string>()
     const serials = [...uniqueCards.keys()]
-    let loaded = 0
-    const total = serials.length
 
-    await new Promise<void>((resolveAll) => {
-      if (total === 0) { resolveAll(); return }
-      for (const serial of serials) {
-        const url = uniqueCards.get(serial)!
+    const fetchAsDataUrl = async (url: string): Promise<string | null> => {
+      try {
+        const res = await fetch(url)
+        if (!res.ok) return null
+        const blob = await res.blob()
+        return await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+          reader.onerror = () => resolve('')
+          reader.readAsDataURL(blob)
+        })
+      } catch {
+        return null
+      }
+    }
+
+    const imageAsDataUrl = async (url: string): Promise<string | null> => {
+      return new Promise<string | null>((resolve) => {
         const img = new Image()
         img.crossOrigin = 'anonymous'
         img.onload = () => {
@@ -117,23 +130,23 @@ export default function DeckPrintView({
             const ctx = canvas.getContext('2d')
             if (ctx) {
               ctx.drawImage(img, 0, 0)
-              result.set(serial, canvas.toDataURL('image/jpeg', 0.85))
+              resolve(canvas.toDataURL('image/jpeg', 0.85))
+              return
             }
-          } catch {
-            // CORS or canvas taint, skip
-          }
-          loaded++
-          if (loaded === total) resolveAll()
+          } catch { /* canvas taint */ }
+          resolve(null)
         }
-        img.onerror = () => {
-          loaded++
-          if (loaded === total) resolveAll()
-        }
+        img.onerror = () => resolve(null)
         img.src = url
-      }
-      // Timeout 30s
-      setTimeout(() => resolveAll(), 30000)
-    })
+      })
+    }
+
+    await Promise.all(serials.map(async (serial) => {
+      const url = uniqueCards.get(serial)!
+      let data = await fetchAsDataUrl(url)
+      if (!data) data = await imageAsDataUrl(url)
+      if (data) result.set(serial, data)
+    }))
 
     return result
   }

@@ -8,9 +8,19 @@ export interface ChangelogEntry {
   changes: string[]
 }
 
-export const APP_VERSION = '1.75'
+export const APP_VERSION = '1.76'
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.76',
+    date: '2026-11-25',
+    changes: [
+      '卡图源全面切换至 haronomagia.com：6733 张卡升级为 744x1039 高清图，IG16/IG17 等新包 600x840，其余 260x363 缩略图；旧图源 CDN 对 IG16/IG17/G46 等新包已失效',
+      '新增卡图自动兜底链：图片加载失败时自动依次尝试高清/新包/缩略/旧源，尽可能保证卡图显示',
+      '修复 G45-061、G46-018 等 8 张门扉卡未被正确识别的问题（效果含「门扉卡」但缺图标）',
+      'PDF 导出适配新图源：采用 fetch 预加载卡图（Android 绕过 CORS），导出含图 PDF 不受图源切换影响',
+    ],
+  },
   {
     version: '1.75',
     date: '2026-11-19',

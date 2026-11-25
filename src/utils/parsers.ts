@@ -137,7 +137,8 @@ export function parseRarity(raw: string): Rarity {
 }
 
 // ============ Image URL builder ============
+// 卡图源：haronomagia（real 高清 → future 新包 → main 缩略），目录使用 serial 自身前缀
 export function getCardImageUrl(packPrefix: string, serial: string): string {
-  // CDN pattern from website analysis
-  return `http://zximg-cdn.yimieji.com/card/${packPrefix}/${serial}.png`
+  const sp = serial.split('-')[0] || packPrefix
+  return `https://haronomagia.com/zxcard/images/${sp}/${serial}.png`
 }
